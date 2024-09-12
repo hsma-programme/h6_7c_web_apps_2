@@ -1,6 +1,8 @@
 import simpy
 import random
 import pandas as pd
+import numpy as np
+import plotly.express as px
 
 # Class to store global parameter values
 class g:
@@ -15,20 +17,21 @@ class g:
     mean_call_time = 4
 
     # Resource numbers
-    number_of_receptionists = 1 # Base = 1
-    number_of_gps = 2 # Base = 2
+    number_of_receptionists = 1
+    number_of_gps = 2
 
     # Branch probabilities
     prob_book_test = 0.25
 
     # Simulation meta parameters
     sim_duration = 480
-    number_of_runs = 100
+    number_of_runs = 10
 
 # Class representing patients coming in to the GP surgery
 class Patient:
     def __init__(self, p_id):
         self.id = p_id
+        self.arrival_time = 0
         self.q_time_reg = 0
         self.q_time_gp = 0
         self.q_time_book_test = 0
@@ -37,6 +40,7 @@ class Patient:
 class Caller:
     def __init__(self, c_id):
         self.id = c_id
+        self.call_time = 0
         self.q_time_call = 0
 
 # Class representing our model of the GP surgery
@@ -64,15 +68,23 @@ class Model:
         # Set up DataFrame to store patient-level results
         self.patient_results_df = pd.DataFrame()
         self.patient_results_df["Patient ID"] = [1]
-        self.patient_results_df["Q Time Reg"] = [0.0]
-        self.patient_results_df["Q Time GP"] = [0.0]
-        self.patient_results_df["Q Time Book Test"] = [0.0]
+        self.patient_results_df["Arrival Time"] = [0.0]
+        self.patient_results_df["Queue Time Reg"] = [0.0]
+        self.patient_results_df["Time Seen For Registration"] = [0.0]
+        self.patient_results_df["Queue Time GP"] = [0.0]
+        self.patient_results_df["Time Seen By GP"] = [0.0]
+        self.patient_results_df["Queue Time Book Test"] = [0.0]
+        self.patient_results_df["Time Test Booking Started"] = [0.0]
+        self.patient_results_df["Departure Time"] = [0.0]
         self.patient_results_df.set_index("Patient ID", inplace=True)
 
         # Set up DataFrame to store caller-level results
         self.caller_results_df = pd.DataFrame()
         self.caller_results_df["Caller ID"] = [1]
-        self.caller_results_df["Q Time Call"] = [0.0]
+        self.caller_results_df["Call Start Time"] = [0.0]
+        self.caller_results_df["Queue Time Call"] = [0.0]
+        self.caller_results_df["Call Answered At"] = [0.0]
+        self.caller_results_df["Call End Time"] = [0.0]
         self.caller_results_df.set_index("Caller ID", inplace=True)
 
         # Set up attributes that will store mean queuing times across the run
@@ -112,6 +124,9 @@ class Model:
     def attend_gp_surgery(self, patient):
         # Registration activity
         start_q_reg = self.env.now
+        self.patient_results_df.at[patient.id, "Arrival Time"] = (
+                start_q_reg
+            )
 
         with self.receptionist.request() as req:
             yield req
@@ -120,8 +135,11 @@ class Model:
 
             patient.q_time_reg = end_q_reg - start_q_reg
 
-            self.patient_results_df.at[patient.id, "Q Time Reg"] = (
+            self.patient_results_df.at[patient.id, "Queue Time Reg"] = (
                 patient.q_time_reg
+            )
+            self.patient_results_df.at[patient.id, "Time Seen For Registration"] = (
+                start_q_reg + patient.q_time_reg
             )
 
             sampled_reg_time = random.expovariate(
@@ -140,8 +158,11 @@ class Model:
 
             patient.q_time_gp = end_q_gp - start_q_gp
 
-            self.patient_results_df.at[patient.id, "Q Time GP"] = (
+            self.patient_results_df.at[patient.id, "Queue Time GP"] = (
                 patient.q_time_gp
+            )
+            self.patient_results_df.at[patient.id, "Time Seen By GP"] = (
+                start_q_gp + patient.q_time_gp
             )
 
             sampled_gp_time = random.expovariate(
@@ -162,8 +183,12 @@ class Model:
 
                 patient.q_time_book_test = end_q_book_test - start_q_book_test
 
-                self.patient_results_df.at[patient.id, "Q Time Book Test"] = (
+                self.patient_results_df.at[patient.id, "Queue Time Book Test"] = (
                     patient.q_time_book_test
+                )
+
+                self.patient_results_df.at[patient.id, "Time Test Booking Started"] = (
+                    start_q_book_test + patient.q_time_book_test
                 )
 
                 sampled_book_test_time = random.expovariate(
@@ -172,10 +197,17 @@ class Model:
 
                 yield self.env.timeout(sampled_book_test_time)
 
+            self.patient_results_df.at[patient.id, "Departure Time"] = (
+                self.env.now
+            )
+
     # Generator function representing callers phoning the GP surgery
     def call_gp_surgery(self, caller):
         # Answering call activity
         start_q_call = self.env.now
+        self.caller_results_df.at[caller.id, "Call Start Time"] = (
+                start_q_call
+            )
 
         with self.receptionist.request() as req:
             yield req
@@ -184,8 +216,12 @@ class Model:
 
             caller.q_time_call = end_q_call - start_q_call
 
-            self.caller_results_df.at[caller.id, "Q Time Call"] = (
+            self.caller_results_df.at[caller.id, "Queue Time Call"] = (
                 caller.q_time_call
+            )
+
+            self.caller_results_df.at[caller.id, "Call Answered At"] = (
+                self.env.now
             )
 
             sampled_call_time = random.expovariate(
@@ -194,15 +230,19 @@ class Model:
 
             yield self.env.timeout(sampled_call_time)
 
+            self.caller_results_df.at[caller.id, "Call End Time"] = (
+                self.env.now
+            )
+
     # Method to calculate and store results over the run
     def calculate_run_results(self):
-        self.mean_q_time_reg = self.patient_results_df["Q Time Reg"].mean()
-        self.mean_q_time_gp = self.patient_results_df["Q Time GP"].mean()
+        self.mean_q_time_reg = self.patient_results_df["Queue Time Reg"].mean()
+        self.mean_q_time_gp = self.patient_results_df["Queue Time GP"].mean()
         self.mean_q_time_book_test = (
-            self.patient_results_df["Q Time Book Test"].mean()
+            self.patient_results_df["Queue Time Book Test"].mean()
         )
 
-        self.mean_q_time_call = self.caller_results_df["Q Time Call"].mean()
+        self.mean_q_time_call = self.caller_results_df["Queue Time Call"].mean()
 
     # Method to run a single run of the simulation
     def run(self):
@@ -216,14 +256,7 @@ class Model:
         # Calculate results over the run
         self.calculate_run_results()
 
-        # Print patient and caller level results for this run
-        print (f"Run Number {self.run_number}")
-        print ("PATIENT RESULTS")
-        print (self.patient_results_df)
-        print ()
-        print ("CALLER RESULTS")
-        print (self.caller_results_df)
-        print ()
+        return self.caller_results_df, self.patient_results_df
 
 # Class representing a trial for our simulation
 class Trial:
@@ -231,49 +264,117 @@ class Trial:
     def __init__(self):
         self.df_trial_results = pd.DataFrame()
         self.df_trial_results["Run Number"] = [0]
-        self.df_trial_results["Mean Q Time Reg"] = [0.0]
-        self.df_trial_results["Mean Q Time GP"] = [0.0]
-        self.df_trial_results["Mean Q Time Book Test"] = [0.0]
-        self.df_trial_results["Mean Q Time Call"] = [0.0]
+        self.df_trial_results["Mean Queue Time Reg"] = [0.0]
+        self.df_trial_results["Mean Queue Time GP"] = [0.0]
+        self.df_trial_results["Mean Queue Time Book Test"] = [0.0]
+        self.df_trial_results["Mean Queue Time Call"] = [0.0]
         self.df_trial_results.set_index("Run Number", inplace=True)
 
     # Method to calculate and store means across runs in the trial
     def calculate_means_over_trial(self):
         self.mean_q_time_reg_trial = (
-            self.df_trial_results["Mean Q Time Reg"].mean()
+            self.df_trial_results["Mean Queue Time Reg"].mean()
         )
         self.mean_q_time_gp_trial = (
-            self.df_trial_results["Mean Q Time GP"].mean()
+            self.df_trial_results["Mean Queue Time GP"].mean()
         )
         self.mean_q_time_book_test_trial = (
-            self.df_trial_results["Mean Q Time Book Test"].mean()
+            self.df_trial_results["Mean Queue Time Book Test"].mean()
         )
         self.mean_q_time_call_trial = (
-            self.df_trial_results["Mean Q Time Call"].mean()
+            self.df_trial_results["Mean Queue Time Call"].mean()
         )
-
-    # Method to print trial results, including averages across runs
-    def print_trial_results(self):
-        print ("Trial Results")
-        # The .to_string() below converts the dataframe to a string to print
-        # all of it (rather than just the top and bottom 5 entries)
-        print (self.df_trial_results.to_string())
-
-        print (f"Mean Q Reg : {self.mean_q_time_reg_trial:.1f} minutes")
-        print (f"Mean Q GP : {self.mean_q_time_gp_trial:.1f} minutes")
-        print (f"Mean Q Book Test : {self.mean_q_time_book_test_trial:.1f}",
-               "minutes")
-        print (f"Mean Q Call : {self.mean_q_time_call_trial:.1f} minutes")
 
     # Method to run trial
     def run_trial(self):
+        caller_dfs = []
+        patient_dfs = []
+
         for run in range(g.number_of_runs):
             my_model = Model(run)
-            my_model.run()
+            caller_df, patient_df = my_model.run()
+            caller_df["Run"] = run + 1
+            caller_df["What"] = "Callers"
+            patient_df["Run"] = run + 1
+            patient_df["What"] = "Patients"
+
+            caller_dfs.append(caller_df)
+            patient_dfs.append(patient_df)
 
             self.df_trial_results.loc[run] = [my_model.mean_q_time_reg,
                                               my_model.mean_q_time_gp,
                                               my_model.mean_q_time_book_test,
                                               my_model.mean_q_time_call]
 
-        return self.df_trial_results
+        return self.df_trial_results.round(1), pd.concat(caller_dfs), pd.concat(patient_dfs)
+
+
+df_trial_results, caller_results, patient_results = Trial().run_trial()
+
+print(df_trial_results)
+
+print(caller_results.sample(25))
+
+print(patient_results.sample(25))
+
+
+###########################################################
+# Create some summaries and visualisations for averages   #
+###########################################################
+
+average_waits_fig = px.bar(df_trial_results.reset_index(drop=False).melt(id_vars="Run Number"),
+        y="Run Number", x="value",
+        facet_col="variable",
+        orientation='h')
+
+average_waits_fig.show()
+
+performance_per_run_fig = px.bar(
+    df_trial_results.reset_index(drop=False).melt(id_vars="Run Number"),
+    facet_row="Run Number",
+    y="value",
+    x="variable")
+
+performance_per_run_fig.show()
+
+###########################################################
+# Create some summaries and visualisations for call stats #
+###########################################################
+
+# Adds a column for whether the call was answered
+caller_results["Call Answered"] = np.where(
+    caller_results["Call Answered At"].isna(),
+    "Call Not Answered Before Closing Time",
+    "Call Answered"
+    )
+
+calls_answered_df = pd.DataFrame(
+    caller_results.groupby("Run")["Call Answered"].value_counts()
+).reset_index(drop=False)
+
+calls_answered_df
+
+calls_answered_df_wide = calls_answered_df.pivot(index="Run", columns="Call Answered", values="count").reset_index(drop=False)
+
+calls_and_patients = pd.concat([
+        patient_results[["Run", "Arrival Time", "What"]],
+        caller_results[["Run", "Call Start Time", "What"]].rename(columns={"Call Start Time": "Arrival Time"})
+        ])
+
+arrival_fig = px.strip(calls_and_patients,
+           x="Arrival Time",
+           y="Run",
+           color="What")
+
+arrival_fig.update_traces(jitter=1.0)
+
+arrival_fig.show()
+
+calls_answered_fig = px.bar(
+    calls_answered_df,
+    x="Run",
+    y="count",
+    color="Call Answered"
+)
+
+calls_answered_fig.show()
