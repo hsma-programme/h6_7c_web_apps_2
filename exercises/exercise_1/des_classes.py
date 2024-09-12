@@ -34,13 +34,16 @@ class Patient:
         self.arrival_time = 0
         self.q_time_reg = 0
         self.q_time_gp = 0
+        self.time_with_gp = 0
         self.q_time_book_test = 0
+        self.time_with_receptionist = 0.0
 
 # Class representing callers phoning the GP surgery
 class Caller:
     def __init__(self, c_id):
         self.id = c_id
         self.call_time = 0
+        self.time_with_receptionist = 0.0
         self.q_time_call = 0
 
 # Class representing our model of the GP surgery
@@ -53,6 +56,10 @@ class Model:
         # Set up counters to use as entity IDs
         self.patient_counter = 0
         self.caller_counter = 0
+
+        # Set up lists to store patient objects
+        self.patient_objects = [] ##NEW
+        self.caller_objects = [] ##NEW
 
         # Set up resources
         self.receptionist = simpy.Resource(
@@ -93,12 +100,17 @@ class Model:
         self.mean_q_time_book_test = 0
         self.mean_q_time_call = 0
 
+        # Set up attributes used to monitor total resource usage
+        self.receptionist_utilisation_prop = 0.0
+        self.gp_utilisation_prop = 0.0
+
     # Generator function that represents the DES generator for patient arrivals
     def generator_patient_arrivals(self):
         while True:
             self.patient_counter += 1
 
             p = Patient(self.patient_counter)
+            self.patient_objects.append(p) ##NEW
 
             self.env.process(self.attend_gp_surgery(p))
 
@@ -112,6 +124,7 @@ class Model:
             self.caller_counter += 1
 
             c = Caller(self.caller_counter)
+            self.caller_objects.append(c) ##NEW
 
             self.env.process(self.call_gp_surgery(c))
 
@@ -146,6 +159,8 @@ class Model:
                 1.0 / g.mean_reg_time
             )
 
+            patient.time_with_receptionist += sampled_reg_time
+
             yield self.env.timeout(sampled_reg_time)
 
         # GP Consultation activity
@@ -168,6 +183,8 @@ class Model:
             sampled_gp_time = random.expovariate(
                 1.0 / g.mean_gp_time
             )
+
+            patient.time_with_gp += sampled_gp_time
 
             yield self.env.timeout(sampled_gp_time)
 
@@ -194,6 +211,8 @@ class Model:
                 sampled_book_test_time = random.expovariate(
                     1.0 / g.mean_book_test_time
                 )
+
+                patient.time_with_receptionist += sampled_book_test_time
 
                 yield self.env.timeout(sampled_book_test_time)
 
@@ -228,6 +247,8 @@ class Model:
                 1.0 / g.mean_call_time
             )
 
+            caller.time_with_receptionist += sampled_call_time
+
             yield self.env.timeout(sampled_call_time)
 
             self.caller_results_df.at[caller.id, "Call End Time"] = (
@@ -243,6 +264,23 @@ class Model:
         )
 
         self.mean_q_time_call = self.caller_results_df["Queue Time Call"].mean()
+
+        gp_utilisation_mins = sum([i.time_with_gp for i in self.patient_objects])
+
+        receptionist_utilisation_mins = sum(
+            [i.time_with_receptionist for i in self.patient_objects]
+            ) + sum(
+            [i.time_with_receptionist for i in self.caller_objects]
+            )
+
+        self.gp_utilisation_prop = (
+            gp_utilisation_mins / (g.number_of_gps * g.sim_duration)
+            )
+
+        self.receptionist_utilisation_prop = (
+            receptionist_utilisation_mins / (g.number_of_receptionists * g.sim_duration)
+        )
+
 
     # Method to run a single run of the simulation
     def run(self):
@@ -268,6 +306,8 @@ class Trial:
         self.df_trial_results["Mean Queue Time GP"] = [0.0]
         self.df_trial_results["Mean Queue Time Book Test"] = [0.0]
         self.df_trial_results["Mean Queue Time Call"] = [0.0]
+        self.df_trial_results["GP Utilisation - Percentage"] = [0.0]
+        self.df_trial_results["Receptionist Utilisation - Percentage"] = [0.0]
         self.df_trial_results.set_index("Run Number", inplace=True)
 
     # Method to calculate and store means across runs in the trial
@@ -304,7 +344,10 @@ class Trial:
             self.df_trial_results.loc[run] = [my_model.mean_q_time_reg,
                                               my_model.mean_q_time_gp,
                                               my_model.mean_q_time_book_test,
-                                              my_model.mean_q_time_call]
+                                              my_model.mean_q_time_call,
+                                              round(my_model.gp_utilisation_prop * 100, 2),
+                                              round(my_model.receptionist_utilisation_prop*100, 2)
+                                              ]
 
         return self.df_trial_results.round(1), pd.concat(caller_dfs), pd.concat(patient_dfs)
 
@@ -322,7 +365,11 @@ print(patient_results.sample(25))
 # Create some summaries and visualisations for averages   #
 ###########################################################
 
-average_waits_fig = px.bar(df_trial_results.reset_index(drop=False).melt(id_vars="Run Number"),
+average_waits_fig = px.bar(
+    df_trial_results.drop(
+        columns=["GP Utilisation - Percentage",
+                 "Receptionist Utilisation - Percentage"]
+                 ).reset_index(drop=False).melt(id_vars="Run Number"),
         y="Run Number", x="value",
         facet_col="variable",
         orientation='h')
@@ -330,12 +377,39 @@ average_waits_fig = px.bar(df_trial_results.reset_index(drop=False).melt(id_vars
 average_waits_fig.show()
 
 performance_per_run_fig = px.bar(
-    df_trial_results.reset_index(drop=False).melt(id_vars="Run Number"),
+    df_trial_results.drop(
+        columns=["GP Utilisation - Percentage",
+                 "Receptionist Utilisation - Percentage"]
+                 ).reset_index(drop=False).melt(id_vars="Run Number"),
     facet_row="Run Number",
     y="value",
     x="variable")
 
 performance_per_run_fig.show()
+
+utilisation_boxplot_fig = px.box(
+    (df_trial_results[["GP Utilisation - Percentage",
+                 "Receptionist Utilisation - Percentage"]]
+                 .reset_index(drop=False).melt(id_vars="Run Number")),
+    x="value",
+    y="variable",
+    points="all",
+    range_x=[0, 105]
+)
+
+utilisation_boxplot_fig.show()
+
+utilisation_bar_fig = px.bar(
+    (df_trial_results[["GP Utilisation - Percentage",
+                 "Receptionist Utilisation - Percentage"]]
+                 .reset_index(drop=False).melt(id_vars="Run Number")),
+    x="Run Number",
+    y="value",
+    color="variable",
+    barmode="group"
+)
+
+utilisation_bar_fig.show()
 
 ###########################################################
 # Create some summaries and visualisations for call stats #
