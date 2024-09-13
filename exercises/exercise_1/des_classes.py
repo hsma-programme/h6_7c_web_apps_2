@@ -3,6 +3,7 @@ import random
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import re
 
 # Class to store global parameter values
 class g:
@@ -301,7 +302,7 @@ class Trial:
     # Constructor
     def __init__(self):
         self.df_trial_results = pd.DataFrame()
-        self.df_trial_results["Run Number"] = [0]
+        self.df_trial_results["Run Number"] = [1]
         self.df_trial_results["Mean Queue Time Reg"] = [0.0]
         self.df_trial_results["Mean Queue Time GP"] = [0.0]
         self.df_trial_results["Mean Queue Time Book Test"] = [0.0]
@@ -330,12 +331,12 @@ class Trial:
         caller_dfs = []
         patient_dfs = []
 
-        for run in range(g.number_of_runs):
+        for run in range(1, g.number_of_runs+1):
             my_model = Model(run)
             caller_df, patient_df = my_model.run()
-            caller_df["Run"] = run + 1
+            caller_df["Run"] = run
             caller_df["What"] = "Callers"
-            patient_df["Run"] = run + 1
+            patient_df["Run"] = run
             patient_df["What"] = "Patients"
 
             caller_dfs.append(caller_df)
@@ -352,6 +353,11 @@ class Trial:
         return self.df_trial_results.round(1), pd.concat(caller_dfs), pd.concat(patient_dfs)
 
 
+###########################################################
+# Run a trial using the parameters from the g class and   #
+# print the results                                       #
+###########################################################
+
 df_trial_results, caller_results, patient_results = Trial().run_trial()
 
 print(df_trial_results)
@@ -360,11 +366,18 @@ print(caller_results.sample(25))
 
 print(patient_results.sample(25))
 
-
+###########################################################
 ###########################################################
 # Create some summaries and visualisations for averages   #
+# across the trial                                        #
+###########################################################
 ###########################################################
 
+nhs_colour_sequence = ["#005EB8", "#FFB81C", "#00A499", "#41B6E6", "#AE2573", "#006747"]
+
+##############################################
+# Bar plot - average waits per stage per run #
+##############################################
 average_waits_fig = px.bar(
     df_trial_results.drop(
         columns=["GP Utilisation - Percentage",
@@ -372,20 +385,44 @@ average_waits_fig = px.bar(
                  ).reset_index(drop=False).melt(id_vars="Run Number"),
         y="Run Number", x="value",
         facet_col="variable",
-        orientation='h')
+        title="Average Waits (Minutes) For Each Stage of the Patient Journey - by Run",
+        orientation='h',
+        labels={"value": "Average Wait (Mins)"},
+        color_discrete_sequence=nhs_colour_sequence
+        )
+
+average_waits_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("variable=", "")))
+
+average_waits_fig.update_layout(yaxis = {'dtick': 1})
 
 average_waits_fig.show()
+
+##############################################
+# Bar plot - waits per stage per run         #
+##############################################
 
 performance_per_run_fig = px.bar(
     df_trial_results.drop(
         columns=["GP Utilisation - Percentage",
                  "Receptionist Utilisation - Percentage"]
-                 ).reset_index(drop=False).melt(id_vars="Run Number"),
-    facet_row="Run Number",
+                 ).reset_index(drop=False).rename(columns=lambda x: re.sub('Mean Queue Time ','',x)).melt(id_vars="Run Number"),
+    facet_col="Run Number",
     y="value",
-    x="variable")
+    x="variable",
+    title="Average Waits (Minutes) For Each Stage of the Patient Journey - by Run",
+    color_discrete_sequence=nhs_colour_sequence,
+    labels={"variable": "",
+            "value": "Queue Time (minutes)"
+            })
+
+performance_per_run_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("Run Number=", "Run ")))
+performance_per_run_fig.for_each_xaxis(lambda xaxis: xaxis.update(dtick=1))
 
 performance_per_run_fig.show()
+
+###############################################
+# Box plot - resource utilisation by resource #
+###############################################
 
 utilisation_boxplot_fig = px.box(
     (df_trial_results[["GP Utilisation - Percentage",
@@ -394,10 +431,19 @@ utilisation_boxplot_fig = px.box(
     x="value",
     y="variable",
     points="all",
-    range_x=[0, 105]
+    title="Resource Utilisation",
+    range_x=[0, 105],
+    color_discrete_sequence=nhs_colour_sequence,
+    labels={"variable": "",
+            "value": "Resource Utilisation Across Run (%)"
+            }
 )
 
 utilisation_boxplot_fig.show()
+
+##############################################
+# Bar plot - resource utilisation per run    #
+##############################################
 
 utilisation_bar_fig = px.bar(
     (df_trial_results[["GP Utilisation - Percentage",
@@ -406,14 +452,27 @@ utilisation_bar_fig = px.bar(
     x="Run Number",
     y="value",
     color="variable",
-    barmode="group"
+    barmode="group",
+    color_discrete_sequence=nhs_colour_sequence,
+    title="Resource Utilisation",
+    labels={"variable": "",
+            "value": "Resource Utilisation Across Run (%)"
+            }
 )
+
+utilisation_bar_fig.update_layout(xaxis = {'dtick': 1})
 
 utilisation_bar_fig.show()
 
+##############################################################
 ###########################################################
 # Create some summaries and visualisations for call stats #
 ###########################################################
+##############################################################
+
+##############################################
+# Dataframe - Call Answering Stats           #
+##############################################
 
 # Adds a column for whether the call was answered
 caller_results["Call Answered"] = np.where(
@@ -426,9 +485,31 @@ calls_answered_df = pd.DataFrame(
     caller_results.groupby("Run")["Call Answered"].value_counts()
 ).reset_index(drop=False)
 
-calls_answered_df
-
 calls_answered_df_wide = calls_answered_df.pivot(index="Run", columns="Call Answered", values="count").reset_index(drop=False)
+
+print(calls_answered_df_wide)
+
+##########################################################################
+# Stackled Bar Plot - Percentage of Calls Answered - by run              #
+##########################################################################
+
+calls_answered_fig = px.bar(
+    calls_answered_df,
+    x="Run",
+    y="count",
+    color="Call Answered",
+    labels={"count": "Number of Calls"},
+    color_discrete_sequence=nhs_colour_sequence,
+    title="Number of Calls - How Many Were Answered in Opening Hours?"
+)
+
+calls_answered_fig.update_layout(xaxis = {'dtick': 1})
+
+calls_answered_fig.show()
+
+##############################################
+# Strip Plot - Arrival Patterns              #
+##############################################
 
 calls_and_patients = pd.concat([
         patient_results[["Run", "Arrival Time", "What"]],
@@ -438,17 +519,20 @@ calls_and_patients = pd.concat([
 arrival_fig = px.strip(calls_and_patients,
            x="Arrival Time",
            y="Run",
-           color="What")
+           color="What",
+           color_discrete_sequence=nhs_colour_sequence,
+           title="Patient Arrivals by Time"
+)
 
 arrival_fig.update_traces(jitter=1.0)
 
 arrival_fig.show()
 
-calls_answered_fig = px.bar(
-    calls_answered_df,
-    x="Run",
-    y="count",
-    color="Call Answered"
-)
+##############################################################
+##############################################################
+# Create some summaries and visualisations for patient stats #
+##############################################################
+##############################################################
 
-calls_answered_fig.show()
+
+# Not implemented - your code here!
