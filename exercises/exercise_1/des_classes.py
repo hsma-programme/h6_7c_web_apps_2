@@ -366,6 +366,29 @@ print(caller_results.sample(25))
 
 print(patient_results.sample(25))
 
+print("=== Receptionist Stats ===")
+
+print(f"The median wait for registration across {g.number_of_runs} " +
+      f"was {df_trial_results['Mean Queue Time Reg'].median():.1f} minutes")
+
+print(f"The median wait for booking a test " +
+      f"was {df_trial_results['Mean Queue Time Book Test'].median():.1f} minutes")
+
+print(f"The median wait for callers to have their call answered " +
+      f"was {df_trial_results['Mean Queue Time Call'].median():.1f} minutes")
+
+print(f"The median utilisation for a receptionist across {g.number_of_runs} " +
+      f"was {df_trial_results['Receptionist Utilisation - Percentage'].median()}%")
+
+print("=== GP Stats ===")
+
+print(f"The median wait for a GP across {g.number_of_runs} " +
+      f"was {df_trial_results['Mean Queue Time GP'].median():.1f} minutes")
+
+
+print(f"The median utilisation for a GP across {g.number_of_runs} " +
+      f"was {df_trial_results['GP Utilisation - Percentage'].median()}%")
+
 ###########################################################
 ###########################################################
 # Create some summaries and visualisations for averages   #
