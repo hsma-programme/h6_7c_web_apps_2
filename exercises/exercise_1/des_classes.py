@@ -694,10 +694,11 @@ arrival_fig = px.strip(
     y="Run",
     # We'll use the colour to distinguish between patients and callers
     color="What",
-    # We'll use our colour paalette
+    # We'll use our colour palette
     color_discrete_sequence=nhs_colour_sequence,
     # Finally, let's add a title
-    title="Patient Arrivals by Time"
+    title="Patient Arrivals by Time",
+    labels={"Arrival Time": "Arrival Time (Simulation Minute)"}
 )
 
 # Force the maximum amount of jitter (random offset) in the points
@@ -710,7 +711,31 @@ arrival_fig.show()
 # Strip Plot - Call Answering by Arrival Time              #
 ############################################################
 
+# We can also use a similar point to give an indication of at what point our system
+# starts to overload during each run.
+# Instead of displaying both patients and callers, we use just the callers this time
+call_answered_detailed_fig = px.strip(
+    # We pass in the dataframe we just created
+    caller_results,
+    # We place the points horizontally depending on the time the individual caller or patient
+    # arrived in the model
+    x="Call Start Time",
+    # We then use the run number on the y axis, which will give us a line of points per run
+    y="Run",
+    # We'll use the colour to distinguish between patients and callers
+    color="Call Answered",
+    # This time, instead of using our palette, let's explicitly map some colours to the possible
+    # values
+    # This allows us to ensure the 'not answered' gets associated with a typically 'bad' colour
+    color_discrete_map={"Call Answered": "#005EB8", # NHS blue
+                        "Call Not Answered Before Closing Time": "#DA291C"}, # NHS Red
+    # Finally, let's add a title
+    title="Patient Calls - Successful Answering over Time",
+    # Make it clearer what the units of the x axis are
+    labels={"Call Start Time": "Call Start Time (Simulation Minute)"},
+)
 
+call_answered_detailed_fig.show()
 
 ##############################################################
 ##############################################################
