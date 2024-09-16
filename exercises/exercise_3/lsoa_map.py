@@ -37,8 +37,17 @@ lsoa_demographics = pd.merge(
     how="inner"
     )
 
-st.write(f"Total Projected Daily Demand: {lsoa_demographics['Projected Average Daily Demand'].sum()}")
-st.write(f"Average IAT: {lsoa_demographics['Projected Average Daily Demand'].sum()/480:.1f} minutes")
+demand_calls = lsoa_demographics['Projected Average Daily Demand'].sum()*0.2
+demand_walkins = lsoa_demographics['Projected Average Daily Demand'].sum()*0.8
+
+iat_calls = 480/(lsoa_demographics['Projected Average Daily Demand'].sum()*0.2)
+iat_walkins = 480/(lsoa_demographics['Projected Average Daily Demand'].sum()*0.8)
+
+st.write(f"Projected Daily Demand - Calls: {demand_calls:.1f}")
+st.write(f"Average IAT: {iat_calls:.1f} minutes (assuming 480 minute day)")
+
+st.write(f"Projected Daily Demand - Walk-ins: {demand_walkins:.1f}")
+st.write(f"Average IAT - Walk-ins: {iat_walkins:.1f} minutes (assuming 480 minute day)")
 
 #create base map
 demand_demographic_map_interactive = folium.Map(
