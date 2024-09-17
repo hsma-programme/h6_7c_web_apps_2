@@ -19,7 +19,11 @@ if st.session_state.the_final_answer is None:
 else:
     f"Your answer is {st.session_state.the_final_answer} - but what was the question?"
 
+st.divider()
+
 name_input = st.text_input("Enter Your Name")
+
+st.divider()
 
 def button_action():
     st.session_state.button_click_count += 1
