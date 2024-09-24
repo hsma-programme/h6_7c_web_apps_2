@@ -6,7 +6,7 @@ import plotly.express as px
 
 st.title("Simple One-Step DES")
 
-st.write("In this discrete event simulation, patients arrive")
+st.write("In this discrete event simulation, patients arrive, are seen by a receptionist, are seen by a doctor, and then some of them need to book an appointment via the receptionist.")
 
 # Class to store global parameter values
 # class g:
@@ -282,6 +282,6 @@ class Trial:
 # A user must press a streamlit button to run the model
 button_run_pressed = st.button("Run simulation")
 
-results_df = Trial()
+results_df = Trial().run_trial()
 
 st.dataframe(pd.DataFrame(results_df))
