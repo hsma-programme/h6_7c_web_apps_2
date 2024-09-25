@@ -239,5 +239,5 @@ if button_run_pressed:
             st.subheader("Run Averages")
             st.dataframe(mean_results_df)
         with col_2:
-            st.subheader("Run Averages")
+            st.subheader("Patient-Level Details")
             st.dataframe(detailed_run_results_df)
