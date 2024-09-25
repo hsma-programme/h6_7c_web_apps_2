@@ -10,10 +10,12 @@ This will only appear if you are logged into a Github account
 
 At the end of this session, students should be able to:
 
-- Built a web app frontend for a simpy discrete event simulation
-- Improve the user experience for apps with lots of inputs using a run button
+- Build a web app frontend for a simpy discrete event simulation
+- Improve the user experience for apps with lots of inputs by using a run button to control execution
 - Split apps into multiple pages
 - Split app code and model code into separate files
+- Apply a custom colour theme and logo to an app
+- Import a custom css file to apply further theming
 - Improve app performance with data caching and partial reruns (fragments)
 - Use session state to persist information across multiple runs or pages
 - Upload an app to the Streamlit community cloud
