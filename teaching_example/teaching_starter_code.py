@@ -270,10 +270,6 @@ target_met_summary_df = pd.DataFrame(
 
 print(target_met_summary_df)
 
-# Note that this will error if you don't have patients falling into each of these categories!
-# The column won't exist unless patients in that category exist within the simulation, and they
-# only will if the service is running poorly
-# You would want to add some error handling or change the way this is calculated to be more robust
 target_met_summary_df['Target Wait Met'] = (
     target_met_summary_df["Seen - Wait Target Met"] /
     target_met_summary_df.sum(axis=1)
