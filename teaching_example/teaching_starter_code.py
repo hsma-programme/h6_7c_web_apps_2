@@ -7,7 +7,7 @@ import numpy as np # For adding some conditional columns to our dataframes
 class g:
     patient_inter = 5
     mean_n_consult_time = 25
-    number_of_nurses = 2
+    number_of_nurses = 10
     sim_duration = 720
     number_of_runs = 5
 
@@ -276,9 +276,7 @@ print(target_met_summary_df)
 # You would want to add some error handling or change the way this is calculated to be more robust
 target_met_summary_df['Target Wait Met'] = (
     target_met_summary_df["Seen - Wait Target Met"] /
-    (target_met_summary_df["Not Seen Before Clinic Close"] +
-        target_met_summary_df["Seen - Wait Target Met"] +
-        target_met_summary_df["Seen - Wait Target Not Met"])
+    target_met_summary_df.sum(axis=1)
     )*100
 
 fig2 = px.bar(
