@@ -16,9 +16,6 @@
     }
   },
   "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f environment/requirements.txt ] && pip3 install --user -r environment/requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
-  "postAttachCommand": {
-    "server": "streamlit run example_code/input_demo_simple_calculator_v1.py --server.enableCORS false --server.enableXsrfProtection false"
-  },
   "portsAttributes": {
     "8501": {
       "label": "Application",
