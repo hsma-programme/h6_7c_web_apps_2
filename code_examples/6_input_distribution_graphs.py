@@ -61,13 +61,13 @@ patient_iat_slider = st.slider("What is the average length of time between patie
 
 iat_dist = Exponential(patient_iat_slider)
 iat_fig = px.histogram(iat_dist.sample(size=2500), height=150)
-iat_fig.update_layout(yaxis_title="", xaxis_title="Consultation Time<br>(Minutes)")
+iat_fig.update_layout(yaxis_title="", xaxis_title="Patient IAT<br>(Minutes)")
 iat_fig.update_xaxes(tick0=0,
                      dtick=10,
                      range=[0, 240])
 iat_fig.layout.update(showlegend=False,
                       margin=dict(l=0, r=0, t=0, b=0))
-st.markdown("#### Consultation Time Distribution")
+st.markdown("#### Patient IAT Distribution")
 st.plotly_chart(iat_fig,
                 use_container_width=True,
                 config = {'displayModeBar': False})
@@ -80,7 +80,7 @@ patient_consult_slider = st.slider("What is the mean length of time (in minutes)
                                    min_value = 3, max_value=60, value=6)
 
 consult_dist = Exponential(patient_consult_slider)
-consult_fig = px.histogram(iat_dist.sample(size=2500), height=150)
+consult_fig = px.histogram(consult_dist.sample(size=2500), height=150)
 consult_fig.update_layout(yaxis_title="", xaxis_title="Consultation Time<br>(Minutes)")
 consult_fig.update_xaxes(tick0=0,
                      dtick=10,
@@ -280,8 +280,11 @@ class Trial:
 
 
 # A user must press a streamlit button to run the model
+
 button_run_pressed = st.button("Run simulation")
 
-results_df = Trial()
+if button_run_pressed:
+    with st.spinner('Simulating the minor injuries unit...'):
+        results_df = Trial().run_trial()
 
-st.dataframe(pd.DataFrame(results_df))
+        st.dataframe(pd.DataFrame(results_df))
