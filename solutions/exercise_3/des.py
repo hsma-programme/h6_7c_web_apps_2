@@ -8,17 +8,26 @@ from des_classes import g, Trial
 
 st.set_page_config(layout="wide")
 
-st.logo("../../exercises/exercise_2/hsma_logo.png")
+st.logo("hsma_logo.png")
 
+# While we will set some more session state variables here, I have opted to initialise them in the
+# app.py file instead of in here. This is a neat trick in multipage apps that prevents you from
+# having to repeat the initialisation code in multiple places.
+# Take a look at the app.py file for full details!
+# If I had initialised them here, I would have used the code
+#
+# if 'walk_in_demand' not in st.session_state:
+#     st.session_state.walk_in_demand = 150
+# if 'calls_demand' not in st.session_state:
+#     st.session_state.calls_demand = 50
+
+# Import custom css for using a Google font
 with open("style.css") as css:
     st.markdown(f'<style>{css.read()}</style>', unsafe_allow_html=True)
 
 st.title("Clinic Simulation")
 
 with st.sidebar:
-    st.subheader("Model Inputs")
-
-    st.divider()
     st.markdown("#### Simulation Parameters")
     sim_duration_input =  st.slider("Simulation Duration (minutes)", 60, 840, 480)
     st.write(f"The clinic is open for {sim_duration_input/60:.2f} hours")
@@ -26,7 +35,19 @@ with st.sidebar:
 
     st.divider()
 
+    # Here I've replaced the user input with the demand from the previous page.
+    # First I'm just displaying the demand from the previous page to confirm that's worked
     st.markdown("#### Demand")
+    st.write(f"The calculated daily walk-in demand is {st.session_state.walk_in_demand:.0f} walk-in patients")
+    st.write(f"The calculated daily call demand is {st.session_state.calls_demand:.0f} calls")
+    if st.session_state.walk_in_demand == 150 and st.session_state.calls_demand == 50:
+        st.warning("You are using the default values for demand - please go to the previous page to choose your regions")
+
+    # On the previous page, we calculated the projected inter-arrival time by dividing the number
+    # of minutes in a clinic day by the daily demand.
+    # However, that page assumed a simulation day would be 480 minutes (as
+    # that hadn't been set yet). Here, we have a user-defined value for how long the clinic is open,
+    # so let's use that for our calculation
     patient_inter_input = sim_duration_input / st.session_state.walk_in_demand
     call_inter_input = sim_duration_input / st.session_state.calls_demand
 
@@ -52,6 +73,7 @@ with st.sidebar:
 
 
 # Inter-arrival times
+# Here we're passing in the inter-arrival time that we calculated from the input
 g.patient_inter = patient_inter_input
 g.call_inter = call_inter_input
 
@@ -514,8 +536,6 @@ if button_run_pressed:
             # Note that we have to use @st.fragment to avoid the app rerunning every time we click
             # the download button! This is a known bug.
             # See https://github.com/streamlit/streamlit/issues/4382 for more details.
-            # We cover fragments in the next section of the session; I've included it here
-            # to ensure this solution file works as a user would expect.
 
             @st.fragment
             def download_1():
